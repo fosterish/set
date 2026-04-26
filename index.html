@@ -1,0 +1,165 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Set</title>
+  <style>
+    :root {
+      --bg: #1f2937;
+      --panel: #111827;
+      --text: #f3f4f6;
+      --muted: #9ca3af;
+      --card-bg: #ffffff;
+      --card-border: #d1d5db;
+      --select: #4a90e2;
+      --valid: #22c55e;
+      --invalid: #ef4444;
+      --deny: #f59e0b;
+      --color-red: #d92626;
+      --color-green: #1ea155;
+      --color-purple: #7b3aa8;
+    }
+
+    * { box-sizing: border-box; }
+
+    html, body {
+      margin: 0;
+      padding: 0;
+      background: var(--bg);
+      color: var(--text);
+      font-family: system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+      min-height: 100vh;
+    }
+
+    .app {
+      max-width: 900px;
+      margin: 0 auto;
+      padding: 24px 16px 48px;
+    }
+
+    h1 {
+      margin: 0 0 16px;
+      font-weight: 600;
+      letter-spacing: 0.04em;
+    }
+
+    .toolbar {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      margin-bottom: 20px;
+      flex-wrap: wrap;
+    }
+
+    button {
+      background: #374151;
+      color: var(--text);
+      border: 1px solid #4b5563;
+      border-radius: 6px;
+      padding: 8px 14px;
+      font: inherit;
+      cursor: pointer;
+      transition: background 0.15s, border-color 0.15s;
+    }
+
+    button:hover:not(:disabled) {
+      background: #4b5563;
+    }
+
+    button:disabled {
+      opacity: 0.5;
+      cursor: not-allowed;
+    }
+
+    .deck-count {
+      color: var(--muted);
+      font-size: 0.95em;
+    }
+
+    .board {
+      display: grid;
+      grid-template-columns: repeat(3, 1fr);
+      gap: 14px;
+      padding: 12px;
+      border: 2px solid transparent;
+      border-radius: 10px;
+      transition: border-color 0.15s, background-color 0.15s;
+      max-width: 640px;
+      margin: 0 auto;
+    }
+
+    .toolbar { max-width: 640px; margin-left: auto; margin-right: auto; }
+    h1 { max-width: 640px; margin-left: auto; margin-right: auto; }
+
+    .board.flash-deny-add {
+      animation: denyPulse 0.5s ease-out;
+    }
+
+    @keyframes denyPulse {
+      0%, 100% { border-color: transparent; background-color: transparent; }
+      50% { border-color: var(--deny); background-color: rgba(245, 158, 11, 0.12); }
+    }
+
+    .card {
+      position: relative;
+      background: var(--card-bg);
+      border: 2px solid var(--card-border);
+      border-radius: 10px;
+      aspect-ratio: 3 / 2;
+      cursor: pointer;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      user-select: none;
+      transition: transform 0.1s, border-color 0.15s, box-shadow 0.15s;
+    }
+
+    .card:hover {
+      transform: translateY(-2px);
+      box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3);
+    }
+
+    .card.selected {
+      border-color: var(--select);
+      box-shadow: 0 0 0 3px rgba(74, 144, 226, 0.35);
+    }
+
+    .card.flash-valid {
+      animation: validPulse 0.5s ease-out;
+    }
+
+    .card.flash-invalid {
+      animation: invalidPulse 0.5s ease-out;
+    }
+
+    @keyframes validPulse {
+      0%, 100% { background-color: var(--card-bg); border-color: var(--card-border); }
+      50% { background-color: rgba(34, 197, 94, 0.35); border-color: var(--valid); }
+    }
+
+    @keyframes invalidPulse {
+      0%, 100% { background-color: var(--card-bg); border-color: var(--card-border); }
+      50% { background-color: rgba(239, 68, 68, 0.35); border-color: var(--invalid); }
+    }
+
+    .card svg {
+      width: 88%;
+      height: 78%;
+    }
+
+    @media (max-width: 600px) {
+      .board { gap: 8px; padding: 6px; }
+      h1 { font-size: 1.4em; }
+    }
+  </style>
+</head>
+<body>
+  <div id="root"></div>
+
+  <script src="vendor/mithril.min.js"></script>
+  <script src="game.js"></script>
+  <script src="card.js"></script>
+  <script src="app.js"></script>
+</body>
+</html>
