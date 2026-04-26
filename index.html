@@ -49,7 +49,12 @@
       align-items: center;
       gap: 12px;
       margin-bottom: 20px;
-      flex-wrap: wrap;
+      flex-wrap: nowrap;
+    }
+
+    .toolbar > button,
+    .toolbar > .settings-wrap {
+      flex-shrink: 0;
     }
 
     button {
@@ -77,6 +82,89 @@
       font-size: 0.95em;
     }
 
+    .status-group {
+      display: flex;
+      flex-wrap: wrap;
+      align-items: center;
+      gap: 4px 12px;
+      flex: 1 1 auto;
+      min-width: 0;
+    }
+
+    .set-status {
+      font-size: 0.95em;
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+    }
+
+    .set-status::before {
+      content: '';
+      display: inline-block;
+      width: 8px;
+      height: 8px;
+      border-radius: 50%;
+      background: currentColor;
+      box-shadow: 0 0 6px currentColor;
+    }
+
+    .set-status.set-present { color: #34d399; }
+    .set-status.set-absent  { color: #fbbf24; }
+
+    .settings-wrap {
+      position: relative;
+      margin-left: auto;
+      display: inline-flex;
+    }
+
+    .icon-button {
+      padding: 6px;
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      color: var(--muted);
+    }
+
+    .icon-button:hover:not(:disabled) {
+      color: var(--text);
+    }
+
+    .icon-button[aria-expanded="true"] {
+      color: var(--text);
+      background: #4b5563;
+    }
+
+    .settings-dropdown {
+      position: absolute;
+      top: calc(100% + 6px);
+      right: 0;
+      min-width: 280px;
+      background: #1f2937;
+      border: 1px solid #4b5563;
+      border-radius: 8px;
+      padding: 12px 14px;
+      z-index: 20;
+      box-shadow: 0 8px 24px rgba(0, 0, 0, 0.45);
+    }
+
+    .settings-toggle {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      cursor: pointer;
+      user-select: none;
+      font-size: 0.95em;
+      line-height: 1.3;
+    }
+
+    .settings-toggle input {
+      flex-shrink: 0;
+      width: 16px;
+      height: 16px;
+      cursor: pointer;
+      accent-color: var(--select);
+    }
+
     .board {
       display: grid;
       grid-template-columns: repeat(3, 1fr);
@@ -89,8 +177,13 @@
       margin: 0 auto;
     }
 
-    .toolbar { max-width: 640px; margin-left: auto; margin-right: auto; }
-    h1 { max-width: 640px; margin-left: auto; margin-right: auto; }
+    h1, .toolbar {
+      max-width: 640px;
+      margin-left: auto;
+      margin-right: auto;
+      padding-left: 12px;
+      padding-right: 12px;
+    }
 
     .board.flash-deny-add {
       animation: denyPulse 0.5s ease-out;
