@@ -14,17 +14,23 @@
     boardFlash: false,
     locked: false,
     showSettings: false,
+    pendingClaim: false,
+    scores: [0, 0],
+    gameOver: false,
     settings: {
-      disallowAddWhenSet: false
+      disallowAddWhenSet: false,
+      scoringEnabled: false,
+      playerCount: 2
     }
   };
 
   function saveState() {
     try {
       localStorage.setItem(STORAGE_KEY, JSON.stringify({
-        v: 1,
+        v: 2,
         deck: state.deck,
         board: state.board,
+        scores: state.scores,
         settings: state.settings
       }));
     } catch (e) {
@@ -37,12 +43,17 @@
       var raw = localStorage.getItem(STORAGE_KEY);
       if (!raw) return null;
       var data = JSON.parse(raw);
-      if (!data || data.v !== 1) return null;
+      if (!data) return null;
+      if (data.v !== 1 && data.v !== 2) return null;
       if (!Array.isArray(data.deck) || !Array.isArray(data.board)) return null;
       return data;
     } catch (e) {
       return null;
     }
+  }
+
+  function recomputeGameOver() {
+    state.gameOver = state.deck.length === 0 && !Game.boardHasSet(state.board);
   }
 
   function startNewGame() {
@@ -54,6 +65,13 @@
     state.flashIds = null;
     state.boardFlash = false;
     state.locked = false;
+    state.pendingClaim = false;
+    state.gameOver = false;
+    if (state.settings.scoringEnabled) {
+      state.scores = new Array(state.settings.playerCount).fill(0);
+    } else {
+      state.scores = [];
+    }
     saveState();
   }
 
@@ -89,9 +107,17 @@
     state.flashKind = valid ? 'valid' : 'invalid';
     state.locked = true;
 
+    if (valid && state.settings.scoringEnabled) {
+      // Hold the green glow on the cards and freeze the board until a
+      // player claims by tapping their score button.
+      state.pendingClaim = true;
+      return;
+    }
+
     setTimeout(function () {
       if (valid) {
         applyValidSet();
+        recomputeGameOver();
         saveState();
       } else {
         state.selected = [];
@@ -101,6 +127,19 @@
       state.locked = false;
       m.redraw();
     }, FLASH_MS);
+  }
+
+  function claimSet(playerIndex) {
+    if (!state.pendingClaim) return;
+    if (playerIndex < 0 || playerIndex >= state.scores.length) return;
+    state.scores[playerIndex] = (state.scores[playerIndex] || 0) + 1;
+    applyValidSet();
+    state.pendingClaim = false;
+    state.flashKind = null;
+    state.flashIds = null;
+    state.locked = false;
+    recomputeGameOver();
+    saveState();
   }
 
   function applyValidSet() {
@@ -169,11 +208,46 @@
       return;
     }
     state.board = state.board.concat(state.deck.splice(0, 3));
+    recomputeGameOver();
     saveState();
   }
 
   function toggleSettings() {
     state.showSettings = !state.showSettings;
+  }
+
+  function setScoringEnabled(enabled) {
+    state.settings.scoringEnabled = !!enabled;
+    if (state.settings.scoringEnabled) {
+      state.scores = new Array(state.settings.playerCount).fill(0);
+    } else {
+      // Resolve any frozen claim back to single-player behavior.
+      if (state.pendingClaim) {
+        applyValidSet();
+        state.pendingClaim = false;
+        state.flashKind = null;
+        state.flashIds = null;
+        state.locked = false;
+      }
+      state.scores = [];
+      state.gameOver = false;
+    }
+    recomputeGameOver();
+    saveState();
+  }
+
+  function adjustPlayerCount(delta) {
+    var next = state.settings.playerCount + delta;
+    if (next < 2 || next > 4) return;
+    state.settings.playerCount = next;
+    if (state.settings.scoringEnabled) {
+      if (delta > 0) {
+        state.scores.push(0);
+      } else {
+        state.scores.pop();
+      }
+    }
+    saveState();
   }
 
   function gearIcon() {
@@ -208,7 +282,23 @@
         if (saved.settings && typeof saved.settings === 'object') {
           state.settings.disallowAddWhenSet =
             !!saved.settings.disallowAddWhenSet;
+          state.settings.scoringEnabled =
+            !!saved.settings.scoringEnabled;
+          var pc = parseInt(saved.settings.playerCount, 10);
+          if (pc >= 2 && pc <= 4) state.settings.playerCount = pc;
         }
+        if (state.settings.scoringEnabled) {
+          var n = state.settings.playerCount;
+          if (Array.isArray(saved.scores)) {
+            state.scores = saved.scores.slice(0, n);
+            while (state.scores.length < n) state.scores.push(0);
+          } else {
+            state.scores = new Array(n).fill(0);
+          }
+        } else {
+          state.scores = [];
+        }
+        recomputeGameOver();
       } else {
         startNewGame();
       }
@@ -218,11 +308,17 @@
       var hasSet = strictMode ? Game.boardHasSet(state.board) : false;
       var addDisabled = state.locked || state.deck.length < 3 ||
         (strictMode && hasSet);
+      var addCta = strictMode && !hasSet && !addDisabled;
+      var scoringOn = state.settings.scoringEnabled;
+      var maxScore = scoringOn && state.scores.length
+        ? Math.max.apply(null, state.scores) : 0;
+      var appCls = '.app' +
+        (scoringOn ? '.scoring-on.players-' + state.settings.playerCount : '');
 
-      return m('.app', [
+      return m(appCls, [
         m('h1', 'Set'),
         m('.toolbar', [
-          m('button', {
+          m('button' + (addCta ? '.pulse-cta' : ''), {
             onclick: addThree,
             disabled: addDisabled,
             title: strictMode && hasSet
@@ -284,7 +380,37 @@
                       }
                     }),
                     m('span', 'Disallow adding cards when a set is present')
-                  ])
+                  ]),
+                  m('label.settings-toggle', [
+                    m('input', {
+                      type: 'checkbox',
+                      checked: state.settings.scoringEnabled,
+                      onchange: function (e) {
+                        setScoringEnabled(e.target.checked);
+                      }
+                    }),
+                    m('span', 'Track player scores')
+                  ]),
+                  state.settings.scoringEnabled
+                    ? m('.settings-counter', [
+                        m('span.settings-counter-label', 'Players'),
+                        m('.settings-counter-controls', [
+                          m('button.counter-button', {
+                            onclick: function () { adjustPlayerCount(-1); },
+                            disabled: state.settings.playerCount <= 2,
+                            'aria-label': 'Decrease player count'
+                          }, '\u2212'),
+                          m('span.counter-value',
+                            { 'aria-live': 'polite' },
+                            state.settings.playerCount),
+                          m('button.counter-button', {
+                            onclick: function () { adjustPlayerCount(1); },
+                            disabled: state.settings.playerCount >= 4,
+                            'aria-label': 'Increase player count'
+                          }, '+')
+                        ])
+                      ])
+                    : null
                 ])
               : null
           ])
@@ -292,8 +418,14 @@
         m('.board' + (state.boardFlash ? '.flash-deny-add' : ''),
           state.board.map(function (card) {
             var cls = '.card';
-            if (isSelected(card)) cls += '.selected';
-            if (state.flashIds && state.flashIds.indexOf(card.id) !== -1) {
+            var sel = isSelected(card);
+            if (sel && state.pendingClaim) {
+              cls += '.claim-pending';
+            } else if (sel) {
+              cls += '.selected';
+            }
+            if (state.flashIds && state.flashIds.indexOf(card.id) !== -1 &&
+                !state.pendingClaim) {
               cls += state.flashKind === 'valid' ? '.flash-valid' : '.flash-invalid';
             }
             return m(cls, {
@@ -311,7 +443,26 @@
               }
             }, m(CardView, { card: card }));
           })
-        )
+        ),
+        scoringOn
+          ? m('.player-buttons.players-' + state.settings.playerCount,
+              { role: 'group', 'aria-label': 'Player scores' },
+              state.scores.map(function (score, i) {
+                var cls = '.player-button.pos-p' + (i + 1);
+                if (state.pendingClaim) cls += '.claimable';
+                if (state.gameOver && score === maxScore) cls += '.winner';
+                return m('button' + cls, {
+                  key: 'p' + i,
+                  onclick: function () { claimSet(i); },
+                  disabled: !state.pendingClaim,
+                  'aria-label': 'Player ' + (i + 1) + ', score ' + score
+                }, [
+                  m('span.player-label', 'P' + (i + 1)),
+                  m('span.player-score', score)
+                ]);
+              })
+            )
+          : null
       ]);
     }
   };
