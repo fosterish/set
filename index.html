@@ -45,16 +45,26 @@
     }
 
     .toolbar {
-      display: flex;
+      display: grid;
+      grid-template-columns: auto auto minmax(0, 1fr) auto;
+      grid-template-areas: "add new status gear";
       align-items: center;
-      gap: 12px;
+      gap: 8px 12px;
       margin-bottom: 20px;
-      flex-wrap: nowrap;
     }
 
-    .toolbar > button,
-    .toolbar > .settings-wrap {
-      flex-shrink: 0;
+    .toolbar > button:first-child  { grid-area: add; min-width: 0; }
+    .toolbar > button:nth-child(2) { grid-area: new; min-width: 0; }
+    .toolbar > .status-group       { grid-area: status; }
+    .toolbar > .settings-wrap      { grid-area: gear; }
+
+    @media (max-width: 600px) {
+      .toolbar {
+        grid-template-columns: minmax(0, 1fr) minmax(0, 1fr) auto;
+        grid-template-areas:
+          "add new gear"
+          "status status status";
+      }
     }
 
     button {
@@ -111,9 +121,8 @@
 
     .status-group {
       display: flex;
-      flex-wrap: wrap;
       align-items: center;
-      gap: 4px 12px;
+      gap: 12px;
       flex: 1 1 auto;
       min-width: 0;
     }
@@ -140,7 +149,6 @@
 
     .settings-wrap {
       position: relative;
-      margin-left: auto;
       display: inline-flex;
     }
 
