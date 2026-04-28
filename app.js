@@ -16,21 +16,24 @@
     showSettings: false,
     pendingClaim: false,
     scores: [0, 0],
+    capturedSets: [[], []],
     gameOver: false,
     settings: {
       disallowAddWhenSet: false,
       scoringEnabled: false,
-      playerCount: 2
+      playerCount: 2,
+      penaltiesEnabled: false
     }
   };
 
   function saveState() {
     try {
       localStorage.setItem(STORAGE_KEY, JSON.stringify({
-        v: 2,
+        v: 3,
         deck: state.deck,
         board: state.board,
         scores: state.scores,
+        capturedSets: state.capturedSets,
         settings: state.settings
       }));
     } catch (e) {
@@ -44,7 +47,7 @@
       if (!raw) return null;
       var data = JSON.parse(raw);
       if (!data) return null;
-      if (data.v !== 1 && data.v !== 2) return null;
+      if (data.v !== 1 && data.v !== 2 && data.v !== 3) return null;
       if (!Array.isArray(data.deck) || !Array.isArray(data.board)) return null;
       return data;
     } catch (e) {
@@ -69,10 +72,18 @@
     state.gameOver = false;
     if (state.settings.scoringEnabled) {
       state.scores = new Array(state.settings.playerCount).fill(0);
+      state.capturedSets = makeEmptyBuckets(state.settings.playerCount);
     } else {
       state.scores = [];
+      state.capturedSets = [];
     }
     saveState();
+  }
+
+  function makeEmptyBuckets(n) {
+    var out = [];
+    for (var i = 0; i < n; i++) out.push([]);
+    return out;
   }
 
   function isSelected(card) {
@@ -129,9 +140,34 @@
     }, FLASH_MS);
   }
 
+  function penalize(playerIndex) {
+    if (!state.settings.penaltiesEnabled) return;
+    if (state.locked) return;
+    if (playerIndex < 0 || playerIndex >= state.scores.length) return;
+    if (state.scores[playerIndex] <= 0) return;
+    var bucket = state.capturedSets[playerIndex];
+    if (!bucket || bucket.length === 0) return;
+
+    var triple = bucket.pop();
+    state.scores[playerIndex] -= 1;
+    state.deck = state.deck.concat(triple);
+    Game.shuffle(state.deck);
+    state.selected = [];
+    recomputeGameOver();
+    saveState();
+  }
+
   function claimSet(playerIndex) {
     if (!state.pendingClaim) return;
     if (playerIndex < 0 || playerIndex >= state.scores.length) return;
+    var triple = state.selected
+      .map(function (id) {
+        return state.board.find(function (c) { return c.id === id; });
+      })
+      .filter(function (c) { return !!c; });
+    if (state.capturedSets[playerIndex]) {
+      state.capturedSets[playerIndex].push(triple);
+    }
     state.scores[playerIndex] = (state.scores[playerIndex] || 0) + 1;
     applyValidSet();
     state.pendingClaim = false;
@@ -220,6 +256,7 @@
     state.settings.scoringEnabled = !!enabled;
     if (state.settings.scoringEnabled) {
       state.scores = new Array(state.settings.playerCount).fill(0);
+      state.capturedSets = makeEmptyBuckets(state.settings.playerCount);
     } else {
       // Resolve any frozen claim back to single-player behavior.
       if (state.pendingClaim) {
@@ -230,9 +267,16 @@
         state.locked = false;
       }
       state.scores = [];
+      state.capturedSets = [];
+      state.settings.penaltiesEnabled = false;
       state.gameOver = false;
     }
     recomputeGameOver();
+    saveState();
+  }
+
+  function setPenaltiesEnabled(enabled) {
+    state.settings.penaltiesEnabled = !!enabled;
     saveState();
   }
 
@@ -243,8 +287,10 @@
     if (state.settings.scoringEnabled) {
       if (delta > 0) {
         state.scores.push(0);
+        state.capturedSets.push([]);
       } else {
         state.scores.pop();
+        state.capturedSets.pop();
       }
     }
     saveState();
@@ -284,6 +330,8 @@
             !!saved.settings.disallowAddWhenSet;
           state.settings.scoringEnabled =
             !!saved.settings.scoringEnabled;
+          state.settings.penaltiesEnabled =
+            !!saved.settings.penaltiesEnabled;
           var pc = parseInt(saved.settings.playerCount, 10);
           if (pc >= 2 && pc <= 4) state.settings.playerCount = pc;
         }
@@ -295,8 +343,18 @@
           } else {
             state.scores = new Array(n).fill(0);
           }
+          if (Array.isArray(saved.capturedSets)) {
+            state.capturedSets = saved.capturedSets
+              .slice(0, n)
+              .map(function (b) { return Array.isArray(b) ? b : []; });
+            while (state.capturedSets.length < n) state.capturedSets.push([]);
+          } else {
+            state.capturedSets = makeEmptyBuckets(n);
+          }
         } else {
           state.scores = [];
+          state.capturedSets = [];
+          state.settings.penaltiesEnabled = false;
         }
         recomputeGameOver();
       } else {
@@ -310,6 +368,7 @@
         (strictMode && hasSet);
       var addCta = strictMode && !hasSet && !addDisabled;
       var scoringOn = state.settings.scoringEnabled;
+      var penaltiesOn = scoringOn && state.settings.penaltiesEnabled;
       var maxScore = scoringOn && state.scores.length
         ? Math.max.apply(null, state.scores) : 0;
       var appCls = '.app' +
@@ -410,6 +469,18 @@
                           }, '+')
                         ])
                       ])
+                    : null,
+                  state.settings.scoringEnabled
+                    ? m('label.settings-toggle', [
+                        m('input', {
+                          type: 'checkbox',
+                          checked: state.settings.penaltiesEnabled,
+                          onchange: function (e) {
+                            setPenaltiesEnabled(e.target.checked);
+                          }
+                        }),
+                        m('span', 'Enable score penalties')
+                      ])
                     : null
                 ])
               : null
@@ -448,17 +519,28 @@
           ? m('.player-buttons.players-' + state.settings.playerCount,
               { role: 'group', 'aria-label': 'Player scores' },
               state.scores.map(function (score, i) {
-                var cls = '.player-button.pos-p' + (i + 1);
-                if (state.pendingClaim) cls += '.claimable';
-                if (state.gameOver && score === maxScore) cls += '.winner';
-                return m('button' + cls, {
-                  key: 'p' + i,
-                  onclick: function () { claimSet(i); },
-                  disabled: !state.pendingClaim,
-                  'aria-label': 'Player ' + (i + 1) + ', score ' + score
-                }, [
-                  m('span.player-label', 'P' + (i + 1)),
-                  m('span.player-score', score)
+                var cellCls = '.player-cell.pos-p' + (i + 1);
+                var btnCls = '.player-button';
+                if (state.pendingClaim) btnCls += '.claimable';
+                if (state.gameOver && score === maxScore) btnCls += '.winner';
+                var canPenalize = penaltiesOn && score > 0 && !state.locked;
+                return m(cellCls, { key: 'p' + i }, [
+                  m('button' + btnCls, {
+                    onclick: function () { claimSet(i); },
+                    disabled: !state.pendingClaim,
+                    'aria-label': 'Player ' + (i + 1) + ', score ' + score
+                  }, [
+                    m('span.player-label', 'P' + (i + 1)),
+                    m('span.player-score', score)
+                  ]),
+                  penaltiesOn
+                    ? m('button.player-minus', {
+                        onclick: function () { penalize(i); },
+                        disabled: !canPenalize,
+                        title: 'Subtract a point and return a set to the deck',
+                        'aria-label': 'Subtract a point from Player ' + (i + 1)
+                      }, '\u2212')
+                    : null
                 ]);
               })
             )

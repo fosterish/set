@@ -237,9 +237,15 @@
       font-weight: 600;
     }
 
-    .player-button {
+    .player-cell {
       position: fixed;
       z-index: 30;
+      display: flex;
+      align-items: center;
+      gap: 40px;
+    }
+
+    .player-button {
       min-width: 64px;
       padding: 10px 14px;
       border-radius: 10px;
@@ -253,6 +259,26 @@
       gap: 2px;
       font: inherit;
       transition: background 0.15s, border-color 0.15s, box-shadow 0.2s;
+    }
+
+    .player-minus {
+      width: 32px;
+      height: 32px;
+      padding: 0;
+      border-radius: 8px;
+      font-size: 1em;
+      line-height: 1;
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      flex-shrink: 0;
+      background: rgba(239, 68, 68, 0.22);
+      border-color: rgba(239, 68, 68, 0.55);
+    }
+
+    .player-minus:hover:not(:disabled) {
+      background: rgba(239, 68, 68, 0.38);
+      border-color: rgba(239, 68, 68, 0.85);
     }
 
     .player-button:hover:not(:disabled) {
@@ -326,6 +352,7 @@
       left: 8px;
       top: 50%;
       transform: translateY(-50%);
+      flex-direction: column;
     }
 
     .players-2 .pos-p2,
@@ -334,29 +361,45 @@
       right: 8px;
       top: 50%;
       transform: translateY(-50%);
+      flex-direction: column;
     }
 
     .players-3 .pos-p3 {
       bottom: 12px;
       left: 50%;
       transform: translateX(-50%);
+      flex-direction: row;
     }
 
     .players-4 .pos-p3 {
       bottom: 12px;
       left: 16px;
+      flex-direction: row;
     }
 
     .players-4 .pos-p4 {
       bottom: 12px;
       right: 16px;
+      flex-direction: row-reverse;
     }
 
     @media (orientation: portrait) {
-      .players-4 .pos-p1 { left: 8px;  top: 12px;    transform: none; }
-      .players-4 .pos-p2 { right: 8px; top: 12px;    transform: none; }
-      .players-4 .pos-p3 { left: 8px;  bottom: 12px; top: auto; transform: none; }
-      .players-4 .pos-p4 { right: 8px; bottom: 12px; transform: none; }
+      .players-4 .pos-p1 {
+        left: 8px;  top: 12px;    transform: none;
+        flex-direction: row;
+      }
+      .players-4 .pos-p2 {
+        right: 8px; top: 12px;    transform: none;
+        flex-direction: row-reverse;
+      }
+      .players-4 .pos-p3 {
+        left: 8px;  bottom: 12px; top: auto; transform: none;
+        flex-direction: row;
+      }
+      .players-4 .pos-p4 {
+        right: 8px; bottom: 12px; transform: none;
+        flex-direction: row-reverse;
+      }
     }
 
     .app.scoring-on {
