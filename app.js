@@ -20,6 +20,7 @@
     gameOver: false,
     settings: {
       disallowAddWhenSet: false,
+      showSetIndicator: false,
       scoringEnabled: false,
       playerCount: 2,
       penaltiesEnabled: false
@@ -328,6 +329,8 @@
         if (saved.settings && typeof saved.settings === 'object') {
           state.settings.disallowAddWhenSet =
             !!saved.settings.disallowAddWhenSet;
+          state.settings.showSetIndicator =
+            !!saved.settings.showSetIndicator;
           state.settings.scoringEnabled =
             !!saved.settings.scoringEnabled;
           state.settings.penaltiesEnabled =
@@ -363,7 +366,10 @@
     },
     view: function () {
       var strictMode = state.settings.disallowAddWhenSet;
-      var hasSet = strictMode ? Game.boardHasSet(state.board) : false;
+      var showSetIndicator = state.settings.showSetIndicator;
+      var hasSet = (strictMode || showSetIndicator)
+        ? Game.boardHasSet(state.board)
+        : false;
       var addDisabled = state.locked || state.deck.length < 3 ||
         (strictMode && hasSet);
       var addCta = strictMode && !hasSet && !addDisabled;
@@ -390,7 +396,7 @@
           }, 'New game'),
           m('.status-group', [
             m('span.deck-count', 'Cards remaining: ' + state.deck.length),
-            strictMode
+            showSetIndicator
               ? m('span.set-status' + (hasSet ? '.set-present' : '.set-absent'),
                   hasSet ? 'Set present' : 'Set not present')
               : null
@@ -439,6 +445,17 @@
                       }
                     }),
                     m('span', 'Disallow adding cards when a set is present')
+                  ]),
+                  m('label.settings-toggle', [
+                    m('input', {
+                      type: 'checkbox',
+                      checked: state.settings.showSetIndicator,
+                      onchange: function (e) {
+                        state.settings.showSetIndicator = e.target.checked;
+                        saveState();
+                      }
+                    }),
+                    m('span', 'Show set indicator')
                   ]),
                   m('label.settings-toggle', [
                     m('input', {
