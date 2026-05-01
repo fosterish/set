@@ -18,23 +18,32 @@
     scores: [0, 0],
     capturedSets: [[], []],
     gameOver: false,
+    timerRunning: false,
+    timerStartedAt: null,
+    timerAccumulated: 0,
     settings: {
       disallowAddWhenSet: false,
       showSetIndicator: false,
       scoringEnabled: false,
       playerCount: 2,
-      penaltiesEnabled: false
+      penaltiesEnabled: false,
+      timerEnabled: false
     }
   };
+
+  var timerTick = null;
 
   function saveState() {
     try {
       localStorage.setItem(STORAGE_KEY, JSON.stringify({
-        v: 3,
+        v: 4,
         deck: state.deck,
         board: state.board,
         scores: state.scores,
         capturedSets: state.capturedSets,
+        timerRunning: state.timerRunning,
+        timerStartedAt: state.timerStartedAt,
+        timerAccumulated: state.timerAccumulated,
         settings: state.settings
       }));
     } catch (e) {
@@ -48,7 +57,7 @@
       if (!raw) return null;
       var data = JSON.parse(raw);
       if (!data) return null;
-      if (data.v !== 1 && data.v !== 2 && data.v !== 3) return null;
+      if (data.v !== 1 && data.v !== 2 && data.v !== 3 && data.v !== 4) return null;
       if (!Array.isArray(data.deck) || !Array.isArray(data.board)) return null;
       return data;
     } catch (e) {
@@ -58,9 +67,63 @@
 
   function recomputeGameOver() {
     state.gameOver = state.deck.length === 0 && !Game.boardHasSet(state.board);
+    if (state.gameOver && state.timerRunning) stopTimer();
   }
 
-  function startNewGame() {
+  function timerElapsedMs() {
+    var extra = state.timerRunning && state.timerStartedAt
+      ? Math.max(0, Date.now() - state.timerStartedAt)
+      : 0;
+    return state.timerAccumulated + extra;
+  }
+
+  function startTimer() {
+    if (state.gameOver || state.timerRunning) return;
+    state.timerRunning = true;
+    state.timerStartedAt = Date.now();
+    saveState();
+    ensureTimerTick();
+  }
+
+  function stopTimer() {
+    if (!state.timerRunning) return;
+    state.timerAccumulated += Math.max(0, Date.now() - state.timerStartedAt);
+    state.timerRunning = false;
+    state.timerStartedAt = null;
+    saveState();
+  }
+
+  function resetTimer() {
+    state.timerRunning = false;
+    state.timerStartedAt = null;
+    state.timerAccumulated = 0;
+    saveState();
+  }
+
+  function formatTime(ms) {
+    var s = Math.floor(ms / 1000);
+    var hours = Math.floor(s / 3600);
+    var minutes = Math.floor(s / 60) % 60;
+    var seconds = s % 60;
+    var pad = function (n) { return n < 10 ? '0' + n : '' + n; };
+    return hours > 0
+      ? hours + ':' + pad(minutes) + ':' + pad(seconds)
+      : pad(minutes) + ':' + pad(seconds);
+  }
+
+  function ensureTimerTick() {
+    if (timerTick || !state.timerRunning) return;
+    timerTick = setInterval(function () {
+      if (state.timerRunning) {
+        m.redraw();
+      } else {
+        clearInterval(timerTick);
+        timerTick = null;
+      }
+    }, 250);
+  }
+
+  function startNewGame(opts) {
     var fresh = Game.newGame();
     state.deck = fresh.deck;
     state.board = fresh.board;
@@ -77,6 +140,14 @@
     } else {
       state.scores = [];
       state.capturedSets = [];
+    }
+    state.timerRunning = false;
+    state.timerStartedAt = null;
+    state.timerAccumulated = 0;
+    if (opts && opts.autoStartTimer && state.settings.timerEnabled) {
+      state.timerRunning = true;
+      state.timerStartedAt = Date.now();
+      ensureTimerTick();
     }
     saveState();
   }
@@ -311,6 +382,35 @@
     ]);
   }
 
+  function playIcon() {
+    return m('svg', {
+      width: 14, height: 14, viewBox: '0 0 24 24',
+      fill: 'currentColor', 'aria-hidden': 'true'
+    }, m('polygon', { points: '8,5 19,12 8,19' }));
+  }
+
+  function pauseIcon() {
+    return m('svg', {
+      width: 14, height: 14, viewBox: '0 0 24 24',
+      fill: 'currentColor', 'aria-hidden': 'true'
+    }, [
+      m('rect', { x: 6, y: 5, width: 4, height: 14 }),
+      m('rect', { x: 14, y: 5, width: 4, height: 14 })
+    ]);
+  }
+
+  function resetIcon() {
+    return m('svg', {
+      width: 14, height: 14, viewBox: '0 0 24 24',
+      fill: 'none', stroke: 'currentColor', 'stroke-width': 2,
+      'stroke-linecap': 'round', 'stroke-linejoin': 'round',
+      'aria-hidden': 'true'
+    }, [
+      m('path', { d: 'M3 12a9 9 0 1 0 3-6.7' }),
+      m('polyline', { points: '3 4 3 10 9 10' })
+    ]);
+  }
+
   function cardLabel(card) {
     var n = card.count + 1;
     var shapes = ['pill', 'diamond', 'squiggle'];
@@ -335,8 +435,19 @@
             !!saved.settings.scoringEnabled;
           state.settings.penaltiesEnabled =
             !!saved.settings.penaltiesEnabled;
+          state.settings.timerEnabled =
+            !!saved.settings.timerEnabled;
           var pc = parseInt(saved.settings.playerCount, 10);
           if (pc >= 2 && pc <= 4) state.settings.playerCount = pc;
+        }
+        state.timerAccumulated = typeof saved.timerAccumulated === 'number'
+          ? Math.max(0, saved.timerAccumulated) : 0;
+        if (saved.timerRunning && typeof saved.timerStartedAt === 'number') {
+          state.timerRunning = true;
+          state.timerStartedAt = saved.timerStartedAt;
+        } else {
+          state.timerRunning = false;
+          state.timerStartedAt = null;
         }
         if (state.settings.scoringEnabled) {
           var n = state.settings.playerCount;
@@ -360,6 +471,7 @@
           state.settings.penaltiesEnabled = false;
         }
         recomputeGameOver();
+        if (state.timerRunning) ensureTimerTick();
       } else {
         startNewGame();
       }
@@ -391,7 +503,7 @@
               : 'Deal 3 more cards'
           }, 'Add 3 cards'),
           m('button', {
-            onclick: startNewGame,
+            onclick: function () { startNewGame({ autoStartTimer: true }); },
             disabled: state.locked
           }, 'New game'),
           m('.status-group', [
@@ -399,6 +511,24 @@
             showSetIndicator
               ? m('span.set-status' + (hasSet ? '.set-present' : '.set-absent'),
                   hasSet ? 'Set present' : 'Set not present')
+              : null,
+            state.settings.timerEnabled
+              ? m('.timer', { role: 'group', 'aria-label': 'Game timer' }, [
+                  m('button.timer-button', {
+                    onclick: state.timerRunning ? stopTimer : startTimer,
+                    disabled: state.gameOver && !state.timerRunning,
+                    'aria-label': state.timerRunning ? 'Pause timer' : 'Start timer',
+                    title: state.timerRunning ? 'Pause' : 'Start'
+                  }, state.timerRunning ? pauseIcon() : playIcon()),
+                  m('span.timer-display' + (state.gameOver ? '.game-over' : ''),
+                    { 'aria-live': 'off' },
+                    formatTime(timerElapsedMs())),
+                  m('button.timer-button', {
+                    onclick: resetTimer,
+                    'aria-label': 'Reset timer',
+                    title: 'Reset'
+                  }, resetIcon())
+                ])
               : null
           ]),
           m('.settings-wrap', [
@@ -456,6 +586,17 @@
                       }
                     }),
                     m('span', 'Show set indicator')
+                  ]),
+                  m('label.settings-toggle', [
+                    m('input', {
+                      type: 'checkbox',
+                      checked: state.settings.timerEnabled,
+                      onchange: function (e) {
+                        state.settings.timerEnabled = e.target.checked;
+                        saveState();
+                      }
+                    }),
+                    m('span', 'Show timer')
                   ]),
                   m('label.settings-toggle', [
                     m('input', {
